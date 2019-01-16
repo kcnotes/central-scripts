@@ -10,18 +10,23 @@
     fp.MAXFLAG = (1 << 10) - 1;
     fp.SUMMARY = 'Testing';
     fp.CONTAINER = $('#CC-file-interface');
+
+    // Images uploaded by users in this whitelist must be ignored.
+    // To include: Staff, helper, admin, threadmoderator, chatmoderator, vstf
+    fp.whitelist = ['Mix Gerder'];
+
     
     // Types of files/templates to label
     fp.FileType = {
-        userpage  : { flag: 1,   template: '{{Userpageimage}}' },
-        template  : { flag: 2,   template: '{{Templateimage}}' },
-        category  : { flag: 4,   template: '{{Categoryimage}}' },
-        hub       : { flag: 8,   template: '{{Hubimage}}' },
-        forum     : { flag: 16,  template: '{{Forumimage}}' },
-        thread    : { flag: 32,  template: '{{Threadimage}}' },
-        help      : { flag: 64,  template: '{{Helpimage}}' },
-        staff     : { flag: 128, template: '{{StaffImage}}' },
-        screenshot: { flag: 256, template: '{{Fandom-screenshot}}' }
+        userpage  : { flag: 1,   template: '{{Userpageimage}}',     category: 'UserPage Images'},
+        template  : { flag: 2,   template: '{{Templateimage}}',     category: 'Template Images'},
+        category  : { flag: 4,   template: '{{Categoryimage}}',     category: 'Category Images'},
+        hub       : { flag: 8,   template: '{{Hubimage}}',          category: 'Hub Logo Images'},
+        forum     : { flag: 16,  template: '{{Forumimage}}',        category: 'Forum Images'},
+        thread    : { flag: 32,  template: '{{Threadimage}}',       category: 'Thread Images'},
+        help      : { flag: 64,  template: '{{Helpimage}}',         category: 'Help Images'},
+        staff     : { flag: 128, template: '{{StaffImage}}',        category: 'Staff Images'},
+        screenshot: { flag: 256, template: '{{Fandom-screenshot}}', category: 'Screenshots of Fandom'}
     };
 
     // Namespaces that files may appear in
@@ -38,6 +43,8 @@
         15:   { type: 'category',  name: 'Category talk' },
         110:  { type: 'forum',     name: 'Forum' },
         111:  { type: 'forum',     name: 'Forum talk' },
+        150:  { type: 'hub',       name: 'Hub' },
+        151:  { type: 'hub',       name: 'Hub talk' },
         500:  { type: 'userpage',  name: 'User blog' },
         501:  { type: 'userpage',  name: 'User blog comments' },
         1200: { type: 'thread',    name: 'Message Wall' },
@@ -64,6 +71,10 @@
             },
             dataType: 'json'
         }).then(function(data) {
+            // File is not an image, or error with API
+            if (typeof data.query === 'undefined')
+                return $.Deferred().reject(data.error);
+            // Loop through and get namespace set
             var images = data.query.imageusage;
             var namespaces = [];
             images.forEach(function(image) {
@@ -72,6 +83,41 @@
                 }
             });
             return {images: images, namespaces: namespaces};
+        });
+    };
+
+    fp.getUploadLog = function(lestart) {
+        return $.ajax({
+            url: '/api.php',
+            type: 'GET',
+            data: {
+                action: 'query',
+                list: 'logevents',
+                letype: 'upload',
+                lelimit: 250,
+                lestart: lestart,
+                format: 'json'
+            },
+            dataType: 'json'
+        });
+    };
+    
+    fp.getStaffMods = function () {
+        return $.ajax({
+            url: '/api.php',
+            type: 'GET',
+            data: {
+                action: 'query',
+                list: 'groupmembers',
+                gmgroups: 'staff|sysop|chatmoderator|threadmoderator|helper|vstf',
+                gmlimit: '300',
+                format: 'json'
+            },
+            dataType: 'json'
+        }).then(function (data) {
+            return data.users.map(function (user) {
+                return user.name.replace(' ', '_');
+            });
         });
     };
 
@@ -93,7 +139,6 @@
                  debug: 'true'
              }
          }).then(function (content) {
-            console.log(content); 
             return content;
          });
     };
@@ -114,15 +159,44 @@
         });
     };
 
-    fp.getImageUsage('File:Usernoreplyz.png').then(function(data) {
-        console.log(data);
-        fp.getPageContents('Test');
-    });
+    // Functions used to process and modify the content
+    fp.process = {};
+    // Functions to get information on the content
+    fp.insight = {};
 
-    fp.postPageContents('Test', 'test test test').then(function (d) {
-        console.log(d);
-    }, function (e) {
-        console.log(e);
-    });
+    fp.insight.getCategories = function(content) {
+        var regex = /\[\[Category:([^|]*?)(\|(.*?))?\]\]/ig;
+        var category;
+        var categories = [];
+        while ((category = regex.exec(content)) !== null) {
+            console.log(category);
+            categories.push(category[1].trim());
+        }
+        return categories;
+    };
+
+    fp.insight.parseContent = function (content) {
+        // Regex to match title in group 1 and contents in group 2
+        var regex = /={2,5}(.*?)={2,5}\n((.|\n)+?(?===|$))/ig;
+        var leadregex = /^(.|[\r\n])+?(?===|$)/ig;
+        var parsedContent = {
+            lead: '',
+            content: []
+        }
+        var leads = content.match(leadregex);
+        if (leads && leads[0].charAt(0) !== '=') {
+            parsedContent.lead = content.match(leadregex)[0];
+        }
+        var section;
+        while ((section = regex.exec(content)) !== null) {
+            parsedContent.content.push({
+                heading: section[1].trim(),
+                text: section[2]
+            });
+        }
+        return parsedContent;
+    };
+
+    window.fp = fp;
 
 })(this.jQuery, this.mediaWiki);
