@@ -6,7 +6,8 @@
     var blankspecialparam = $.getUrlVar('blankspecial');
     if (mw.config.get('wgCanonicalSpecialPageName') === "Blankpage" && typeof blankspecialparam !== 'undefined' && blankspecialparam === "blogreport") {
         $('#mw-content-text p').html('<div id="CC-blog-interface"></div>');
-        $('.header-column.header-title h1').text('Blog Report Interface');
+        $('.page-header__title').text('Blog Report Interface');
+        document.title = 'Blog Report Interface';
     }
     if ($('#CC-blog-interface').length === 0) {
         return;
@@ -15,7 +16,7 @@
     bR = {};
 
     // Add Community Staff blog responses, admin/mod responses added later to this array
-    bR.admins = ['BertH', 'Kirkburn', 'Rappy_4187', 'Sannse', 'Merrystar'];
+    bR.admins = ['Kirkburn', 'Rappy_4187', 'Sannse', 'FishTank', 'Brandon_Rhea'];
 
     bR.templates = {
         blogListing: '<div class="new-blog-2 not-expanded" id="{{title}}">' +
@@ -356,7 +357,7 @@
     }
 
     // Start initialise code
-    importStylesheetURI('http://internal-community.wikia.com/index.php?title=MediaWiki:BlogReport.css&action=raw&ctype=text/css');
+    importStylesheetURI('https://internal-community.fandom.com/index.php?title=MediaWiki:BlogReport.css&action=raw&ctype=text/css');
     $('#CC-blog-interface').empty();
     bR.getAdminsAndMods().then(function(admods) {
         bR.admins = bR.admins.concat(admods);
@@ -381,4 +382,3 @@
     });
 })(window, this.jQuery, this.mediaWiki, window.Mustache);
 //</nowiki>
-
