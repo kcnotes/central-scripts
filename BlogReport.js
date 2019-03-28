@@ -4,7 +4,8 @@
         return;
     }
     var blankspecialparam = $.getUrlVar('blankspecial');
-    if (mw.config.get('wgCanonicalSpecialPageName') === "Blankpage" && typeof blankspecialparam !== 'undefined' && blankspecialparam === "blogreport") {
+    if (mw.config.get('wgCanonicalSpecialPageName') === "Blankpage" && 
+            typeof blankspecialparam !== 'undefined' && blankspecialparam === "blogreport") {
         $('#mw-content-text p').html('<div id="CC-blog-interface"></div>');
         $('.page-header__title').text('Blog Report Interface');
         document.title = 'Blog Report Interface';
@@ -26,6 +27,10 @@
             '</a>' +
             '<div class="new-blog-details" title="">' +
             '<div class="new-blog-text"></div>' +
+            '<div class="new-blog-links">' + 
+                '<a href="/wiki/Message Wall:{{username}}" target="_blank">Wall</a>' +
+                '<a href="/wiki/Special:Contributions/{{username}}" target="_blank">Contributions</a>' + 
+            '</div>' +
             '<div class="new-blog-tags">' +
             '{{#short}}<div class="tag-short cb-tag">Short blog</div>{{/short}}' +
             '<div class="new-blog-replies"></div>' +
@@ -70,10 +75,11 @@
     };
 
     bR.renderTemplates = {
-        renderBlog: function (title, timestamp, size) {
+        renderBlog: function (title, timestamp, size, username) {
             return $(
                 mustache.render(bR.templates.blogListing, {
                     title: title,
+                    username: username,
                     encodedtitle: encodeURIComponent(title),
                     timestamp: timestamp,
                     short: size > 150 ? false : true
@@ -117,7 +123,7 @@
                 return user.name.replace(' ', '_');
             });
         });
-    }
+    };
 
     // Get details of a blog page
     bR.getBlogPage = function (title) {
@@ -130,7 +136,7 @@
                 title: title
             },
             dataType: 'json'
-        })
+        });
     };
 
     // Get blog comments for a particular blog
@@ -170,7 +176,7 @@
             },
             dataType: 'json'
         });
-    }
+    };
 
     // Post request to add comment to a particular blog page
     bR.addComment = function (id, comment) {
@@ -187,7 +193,7 @@
             },
             dataType: 'json'
         });
-    }
+    };
 
     // Pad 0's for rendering time
     function pad(n) {
@@ -326,8 +332,8 @@
         var id = $(this).parent().attr('data-id'),
             comment = $(this).parent().find('textarea').val(),
             $error = $(this).parent().find('.cb-error');
-        $this = $(this).parent().parent().parent(),
-            title = $this.find('.new-blog-title').text();
+        $this = $(this).parent().parent().parent();
+        var title = $this.find('.new-blog-title').text();
 
         if (comment === '') {
             $error.text('No text found');
@@ -361,14 +367,14 @@
     $('#CC-blog-interface').empty();
     bR.getAdminsAndMods().then(function(admods) {
         bR.admins = bR.admins.concat(admods);
-        console.log(bR.admins);
         bR.getBlogTitles().done(function (blogData) {
             var blogs = blogData.query.pages;
             for (var key in blogs) {
                 var $newBlog = bR.renderTemplates.renderBlog(
                     blogs[key].title,
                     renderStamp(blogs[key].created),
-                    blogs[key].length
+                    blogs[key].length,
+                    blogs[key].title.match(/User blog:([^/]*)/)[1]
                 );
                 $('#CC-blog-interface').prepend($newBlog);
             }
