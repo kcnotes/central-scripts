@@ -26,7 +26,7 @@
             '</div>' +
             UserNotes.commentsContainer +
             '<div class="un-addcomment">' +
-                'Add a comment' +
+                '<input id="un-addcomment-input" placeholder="Add a comment"></input>' +
             '</div>' +
         '</div>';
     
@@ -37,7 +37,51 @@
 
     UserNotes.appendContainer = function(location) {
         location.append(Mustache.render(UserNotes.container, UserNotes.data));
+        UserNotes.enableDraggable($('.usernotes')[0], $('.un-header')[0]);
     };
+
+    UserNotes.enableDraggable = function(element, hook) {
+        var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        if (hook) {
+            // if present, the header is where you move the DIV from:
+            console.log(hook);
+            hook.onmousedown = dragMouseDown;
+        } else {
+            // otherwise, move the DIV from anywhere inside the DIV:
+            element.onmousedown = dragMouseDown;
+        }
+
+        function dragMouseDown(e) {
+            e = e || window.event;
+            e.preventDefault();
+            // get the mouse cursor position at startup:
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            // call a function whenever the cursor moves:
+            document.onmousemove = elementDrag;
+        }
+
+        function elementDrag(e) {
+            e = e || window.event;
+            e.preventDefault();
+            // calculate the new cursor position:
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            // set the element's new position:
+            element.style.top = (element.offsetTop - pos2) + "px";
+            element.style.left = (element.offsetLeft - pos1) + "px";
+            element.style.bottom = "auto";
+        }
+
+        function closeDragElement() {
+            // stop moving when mouse button is released:
+            document.onmouseup = null;
+            document.onmousemove = null;
+        }
+    }
 
     UserNotes.data = {
         username: 'Username',
@@ -62,7 +106,7 @@
         }],
         wikipath: mw.config.get('wgScriptPath'),
         dark: false
-    }
+    };
 
     window.UserNotes = UserNotes;
 
@@ -73,7 +117,7 @@
             $(this).removeClass('usernotes-closed');
             $(this).addClass('usernotes-open');
             $('#open-usernotes').text('Hide UserNotes');
-            UserNotes.appendContainer($('#usernotes-container'));
+            UserNotes.appendContainer($('body'));
         } else {
             $(this).addClass('usernotes-closed');
             $(this).removeClass('usernotes-open');
@@ -81,7 +125,7 @@
             $('.usernotes').remove();
         }
     });
-    $('#usernotes-container').on('click', '.un-close', function () {
+    $('body').on('click', '.un-close', function () {
         $('#open-usernotes').addClass('usernotes-closed');
         $('#open-usernotes').removeClass('usernotes-open');
         $('#open-usernotes').text('UserNotes');
