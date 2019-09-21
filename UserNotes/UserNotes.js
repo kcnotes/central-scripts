@@ -1,4 +1,30 @@
 ;(function($, mw, Mustache) {
+
+    if (!mw.config.get('wgCanonicalSpecialPageName') === 'Contributions') return;
+    
+    var chars = '.$[]#/%'.split('');
+    var charCodes = chars.map(function(c) {
+        return '%' + c.charCodeAt(0).toString(16).toUpperCase();
+    });
+    var charToCode = {};
+    var codeToChar = {};
+    chars.forEach(function(c, i) {
+        charToCode[c] = charCodes[i];
+        codeToChar[charCodes[i]] = c;
+    });
+    var escapeRegExp = function(str) {
+        return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
+    };
+    var charsRegex = new RegExp('[' + escapeRegExp(chars.join('')) + ']', 'g');
+    var charCodesRegex = new RegExp(charCodes.join('|'), 'g');
+
+    var keyEncode = function(str) {
+        return str.replace(charsRegex, (match) => charToCode[match]);
+    }
+    var keyDecode = function(str) {
+        return str.replace(charCodesRegex, (match) => codeToChar[match]);
+    }
+
     var UserNotes = {};
     UserNotes.commentsContainer = 
         '<div class="un-comments">' +
@@ -10,6 +36,9 @@
                     '&bull; {{time}}' + 
                 '</div>' +
             '</div>' +
+            '{{/comments}}' +
+            '{{^comments}}' +
+            'No comments found.' +
             '{{/comments}}' +
         '</div>';
 
@@ -36,9 +65,9 @@
         '</div>';
     
     UserNotes.openContainer = 
-        '<div id="usernotes-container">' + 
-            '<button id="open-usernotes" class="usernotes-closed">UserNotes</button>' +
-        '</div>';
+        ' | <a class="usernotes-closed{{#count}} usernotes-hasnotes{{/count}}" id="open-usernotes">' +
+            '<span>UserNotes{{#count}} ({{count}}){{/count}}</span>' +
+        '</a>';
 
     UserNotes.appendContainer = function(location) {
         location.append(Mustache.render(UserNotes.container, UserNotes.data));
@@ -49,7 +78,6 @@
         var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
         if (hook) {
             // if present, the header is where you move the DIV from:
-            console.log(hook);
             hook.onmousedown = dragMouseDown;
         } else {
             // otherwise, move the DIV from anywhere inside the DIV:
@@ -98,16 +126,48 @@
         return firebase.auth().signOut();
     }
     
+    UserNotes.getNumComments = function (user) {
+        user = keyEncode(user);
+        return UserNotes.db.ref('/counts/' + user).once('value').then(function (snapshot) {
+            UserNotes.data.count = snapshot.val() ? snapshot.val() : 0;
+        });
+    }
     UserNotes.getComments = function (user) {
-        var x = firebase.database().ref('/comments/' + user).once('value').then(function (snapshot) {
-            console.log(snapshot.val());
-            UserNotes.data.comments = snapshot.val();
-            UserNotes.data.comments.forEach(function(comment) {
-                comment.time = new Date(comment.timestamp).toLocaleString(undefined, {
-                    dateStyle: 'long',
-                    timeStyle: 'short'
-                })
-            });
+        user = keyEncode(user);
+        return UserNotes.db.ref('/comments/' + user).once('value').then(function(snapshot) {
+            UserNotes.data.comments = [];
+            if (snapshot.val()) {
+                snapshot.forEach(function(comment) {
+                    comment = comment.val();
+                    comment.time = new Date(comment.timestamp).toLocaleString(undefined, {
+                        dateStyle: 'long',
+                        timeStyle: 'short'
+                    });
+                    UserNotes.data.comments.push(comment);
+                });
+            }
+        });
+    }
+    UserNotes.postComment = function(user, comment) {
+        user = keyEncode(user);
+        var path = '/comments/' + user + '/';
+        var commentKey = UserNotes.db.ref().child(path).push().key;
+        var newPost = {};
+        newPost[path + commentKey] = {
+            author: UserNotes.currentUser,
+            comment: comment,
+            timestamp: new Date().getTime()
+        }
+        var countRef = firebase.database().ref('/counts/' + user + '/');
+        countRef.transaction(function (currentCount) {
+            return currentCount + 1;
+        });
+        return UserNotes.db.ref().update(newPost);
+    }
+    UserNotes.getDiscordToken = function() {
+        return UserNotes.db.ref('/discord/').once('value').then(function(snapshot) {
+            $.cookie('usernotes-token', snapshot.val());
+            UserNotes.webhookToken = snapshot.val();
         });
     }
 
@@ -125,6 +185,7 @@
             number: 2,
             text: 'mod notes'
         }],
+        count: 0,
         comments: [{
             text: 'Sent insults to User',
             author: 'Jr Meme',
@@ -135,13 +196,15 @@
             time: '3 September 2019 at 13:30'
         }],
         wikipath: mw.config.get('wgScriptPath'),
-        dark: true,
+        dark: false,
         loggedin: false
     };
+    UserNotes.webhook = 'https://discordapp.com/api/webhooks/624983129236701184/';
+    UserNotes.webhookToken = null;
 
     window.UserNotes = UserNotes;
 
-    if (!$('#UserProfileMasthead').length) return;
+    UserNotes.currentUser = mw.config.get('wgUserName');
 
     // Import Firebase
     importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-app.js');
@@ -168,7 +231,9 @@
             if (firebase.auth().currentUser) {
                 UserNotes.data.loggedin = true;
             }
+            UserNotes.db = firebase.database();
             firebase.auth().onAuthStateChanged(function (user) {
+                // Check if logged in
                 if (user) {
                     if (user.email === "noreplyz@fandom.com") {
                         UserNotes.data.loggedin = true;
@@ -176,33 +241,46 @@
                 } else {
                     UserNotes.data.loggedin = false;
                 }
+
+                // Load Discord token
+                if ($.cookie('usernotes-token')) {
+                    UserNotes.webhookToken = $.cookie('usernotes-token');
+                } else {
+                    UserNotes.getDiscordToken();
+                }
                 
-                // Only load container and listeners once
-                if (!UserNotes.loaded) {
+                // Only load container and listeners once, only load if logged in
+                if (!UserNotes.loaded && UserNotes.data.loggedin) {
                     UserNotes.loaded = true;
                     // Place button to open container into the profile
-                    $('#UserProfileMasthead .masthead-info hgroup').append(UserNotes.openContainer);
+                    UserNotes.data.username = $('.UserProfileMasthead .masthead-info h1').text();
+                    UserNotes.getNumComments(UserNotes.data.username).then(function () {
+                        $('.mw-special-Contributions #contentSub > a:last').after(Mustache.render(UserNotes.openContainer, UserNotes.data));
 
-                                    // Toggle open and close
-                                    $('#open-usernotes').on('click', function () {
-                        if ($(this).hasClass('usernotes-closed')) {
-                            $(this).removeClass('usernotes-closed');
-                            $(this).addClass('usernotes-open');
-                            $('#open-usernotes').text('Hide UserNotes');
-                            UserNotes.appendContainer($('body'));
-                        } else {
-                            $(this).addClass('usernotes-closed');
-                            $(this).removeClass('usernotes-open');
-                            $('#open-usernotes').text('UserNotes');
+                        // Toggle open and close
+                        $('#open-usernotes').on('click', function () {
+                            if ($(this).hasClass('usernotes-closed')) {
+                                $(this).removeClass('usernotes-closed');
+                                $(this).addClass('usernotes-open');
+                                $('#open-usernotes').text('Loading notes...');
+                                UserNotes.getComments(UserNotes.data.username).then(function() {
+                                    $('#open-usernotes').text('Hide UserNotes');
+                                    UserNotes.appendContainer($('body'));
+                                });
+                            } else {
+                                $(this).addClass('usernotes-closed');
+                                $(this).removeClass('usernotes-open');
+                                $('#open-usernotes').text('UserNotes (' + UserNotes.data.count + ')');
+                                $('.usernotes').remove();
+                            }
+                        });
+                        // close on X button
+                        $('body').on('click', '.un-close', function () {
+                            $('#open-usernotes').addClass('usernotes-closed');
+                            $('#open-usernotes').removeClass('usernotes-open');
+                            $('#open-usernotes').text('UserNotes (' + UserNotes.data.count + ')');
                             $('.usernotes').remove();
-                        }
-                    });
-                                    // close on X button
-                    $('body').on('click', '.un-close', function () {
-                        $('#open-usernotes').addClass('usernotes-closed');
-                        $('#open-usernotes').removeClass('usernotes-open');
-                        $('#open-usernotes').text('UserNotes');
-                        $('.usernotes').remove();
+                        });
                     });
                 }
             });
