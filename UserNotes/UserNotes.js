@@ -4,7 +4,7 @@
         '<div class="un-comments">' +
             '{{#comments}}' +
             '<div class="un-comment">' +
-                '<div class="un-comment-text">{{text}}</div>' +
+            '<div class="un-comment-text">{{comment}}</div>' +
                 '<div class="un-comment-footer">' + 
                     '<a href="{{wikipath}}/wiki/Special:Contributions/{{author}}" target="_blank">{{author}}</a> ' + 
                     '&bull; {{time}}' + 
@@ -16,18 +16,23 @@
     UserNotes.container = 
         '<div class="usernotes{{#dark}} dark{{/dark}}">' +
             '<h3 class="un-header">{{username}}</h3><div class="un-close"></div>' +
-            '<div class="un-infocards">' +
+            '{{#loggedin}}' +
+            '<!--<div class="un-infocards">' +
                 '{{#infocards}}' +
                 '<div class="un-infocard">' +
                     '<div class="un-infocard-number">{{number}}</div>' +
                     '<div class="un-infocard-text">{{text}}</div>' +
                 '</div>' +
                 '{{/infocards}}' +
-            '</div>' +
+            '</div>-->' +
             UserNotes.commentsContainer +
             '<div class="un-addcomment">' +
                 '<input id="un-addcomment-input" placeholder="Add a comment"></input>' +
             '</div>' +
+            '{{/loggedin}}' +
+            '{{^loggedin}}' + 
+            'Please log in' +
+            '{{/loggedin}}' +
         '</div>';
     
     UserNotes.openContainer = 
@@ -83,6 +88,31 @@
         }
     }
 
+    UserNotes.login = function(username, password) {
+        return firebase.auth().signInWithEmailAndPassword(username, password).catch(function (e) {
+            console.log(e);
+        });
+    }
+
+    UserNotes.logout = function() {
+        return firebase.auth().signOut();
+    }
+    
+    UserNotes.getComments = function (user) {
+        var x = firebase.database().ref('/comments/' + user).once('value').then(function (snapshot) {
+            console.log(snapshot.val());
+            UserNotes.data.comments = snapshot.val();
+            UserNotes.data.comments.forEach(function(comment) {
+                comment.time = new Date(comment.timestamp).toLocaleString(undefined, {
+                    dateStyle: 'long',
+                    timeStyle: 'short'
+                })
+            });
+        });
+    }
+
+    UserNotes.loaded = false;
+    
     UserNotes.data = {
         username: 'Username',
         infocards: [{
@@ -105,30 +135,77 @@
             time: '3 September 2019 at 13:30'
         }],
         wikipath: mw.config.get('wgScriptPath'),
-        dark: false
+        dark: true,
+        loggedin: false
     };
 
     window.UserNotes = UserNotes;
 
     if (!$('#UserProfileMasthead').length) return;
-    $('#UserProfileMasthead .masthead-info hgroup').append(UserNotes.openContainer);
-    $('#open-usernotes').on('click', function() {
-        if ($(this).hasClass('usernotes-closed')) {
-            $(this).removeClass('usernotes-closed');
-            $(this).addClass('usernotes-open');
-            $('#open-usernotes').text('Hide UserNotes');
-            UserNotes.appendContainer($('body'));
-        } else {
-            $(this).addClass('usernotes-closed');
-            $(this).removeClass('usernotes-open');
-            $('#open-usernotes').text('UserNotes');
-            $('.usernotes').remove();
+
+    // Import Firebase
+    importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-app.js');
+    importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-auth.js');
+    importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-database.js');
+
+    var waitForFirebase = setTimeout(function() {
+        if (firebase && firebase.auth && firebase.database) {
+            console.log("cleared");
+            clearTimeout(waitForFirebase);
+
+            // Your web app's Firebase configuration
+            var firebaseConfig = {
+                apiKey: "AIzaSyCveKyNTxRUnvGt1SGf_iUQbh-S3PPPduU",
+                authDomain: "fandom-usernotes.firebaseapp.com",
+                databaseURL: "https://fandom-usernotes.firebaseio.com",
+                projectId: "fandom-usernotes",
+                storageBucket: "",
+                messagingSenderId: "188626865322",
+                appId: "1:188626865322:web:879dcb92b5fa51c68014d3"
+            };
+            // Initialize Firebase
+            firebase.initializeApp(firebaseConfig);
+            if (firebase.auth().currentUser) {
+                UserNotes.data.loggedin = true;
+            }
+            firebase.auth().onAuthStateChanged(function (user) {
+                if (user) {
+                    if (user.email === "noreplyz@fandom.com") {
+                        UserNotes.data.loggedin = true;
+                    }
+                } else {
+                    UserNotes.data.loggedin = false;
+                }
+                
+                // Only load container and listeners once
+                if (!UserNotes.loaded) {
+                    UserNotes.loaded = true;
+                    // Place button to open container into the profile
+                    $('#UserProfileMasthead .masthead-info hgroup').append(UserNotes.openContainer);
+
+                                    // Toggle open and close
+                                    $('#open-usernotes').on('click', function () {
+                        if ($(this).hasClass('usernotes-closed')) {
+                            $(this).removeClass('usernotes-closed');
+                            $(this).addClass('usernotes-open');
+                            $('#open-usernotes').text('Hide UserNotes');
+                            UserNotes.appendContainer($('body'));
+                        } else {
+                            $(this).addClass('usernotes-closed');
+                            $(this).removeClass('usernotes-open');
+                            $('#open-usernotes').text('UserNotes');
+                            $('.usernotes').remove();
+                        }
+                    });
+                                    // close on X button
+                    $('body').on('click', '.un-close', function () {
+                        $('#open-usernotes').addClass('usernotes-closed');
+                        $('#open-usernotes').removeClass('usernotes-open');
+                        $('#open-usernotes').text('UserNotes');
+                        $('.usernotes').remove();
+                    });
+                }
+            });
         }
-    });
-    $('body').on('click', '.un-close', function () {
-        $('#open-usernotes').addClass('usernotes-closed');
-        $('#open-usernotes').removeClass('usernotes-open');
-        $('#open-usernotes').text('UserNotes');
-        $('.usernotes').remove();
-    });
+    }, 1000);
 })(jQuery, mediaWiki, Mustache);
