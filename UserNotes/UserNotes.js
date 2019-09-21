@@ -171,6 +171,24 @@
         });
     }
 
+    UserNotes.postToDiscord = function(user, comment, date) {
+        if (!UserNotes.webhookToken) return $.Deferred().reject({});
+        $.ajax({
+            url: UserNotes.webhook + UserNotes.webhookToken,
+            type: "POST",
+            data: JSON.stringify({
+                embeds: [{
+                    description: '**User:** ' + user + '\n**Comment:** ' + comment,
+                    footer: {
+                        text: 'Author: ' + UserNotes.currentUser
+                    },
+                    timestamp: date.toISOString()
+                }]
+            }),
+            dataType: "text"
+        });
+    }
+
     UserNotes.loaded = false;
     
     UserNotes.data = {
