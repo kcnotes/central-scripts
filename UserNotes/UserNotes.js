@@ -26,12 +26,21 @@
     }
 
     var UserNotes = {};
+
+    UserNotes.spinner = function (size) {
+        return '<svg class="wds-spinner wds-spinner__block" width="' + size + '" height="' + size + '" viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">' +
+            '<g transform="translate(22.5, 22.5)">' +
+            '<circle class="wds-spinner__stroke" fill="none" stroke-linecap="round" stroke-width="5" stroke-dasharray="125" stroke-dashoffset="125" r="20"></circle>' +
+            '</g>' +
+            '</svg>';
+    },
+
     UserNotes.commentsContainer = 
         '{{#comments}}' +
         '<div class="un-comment">' +
         '<div class="un-comment-text">{{comment}}</div>' +
             '<div class="un-comment-footer">' + 
-                '<a href="{{wikipath}}/wiki/Special:Contributions/{{author}}" target="_blank">{{author}}</a> ' + 
+                '[[Special:Contributions/{{author}}|{{author}}]] ' + 
                 '&bull; {{time}}' + 
             '</div>' +
         '</div>' +
@@ -53,7 +62,7 @@
                 '{{/infocards}}' +
             '</div>-->' +
             '<div class="un-comments">' +
-                UserNotes.commentsContainer +
+                UserNotes.spinner(36) +
             '</div>' +
             '<div class="un-addcomment">' +
                 '<input id="un-addcomment-input" placeholder="Add a comment"></input>' +
@@ -61,13 +70,33 @@
             '{{/loggedin}}' +
             '{{^loggedin}}' + 
             'Please log in' +
+            '<input id="un-addpassword" placeholder="Password" type="password"></input>' +
             '{{/loggedin}}' +
         '</div>';
     
     UserNotes.openContainer = 
         ' | <a class="usernotes-closed{{#count}} usernotes-hasnotes{{/count}}" id="open-usernotes">' +
-            '<span>UserNotes{{#count}} ({{count}}){{/count}}</span>' +
+            '<span>UserNotes{{#count}} ({{count}}){{/count}}{{^loggedin}} (Log in){{/loggedin}}</span>' +
         '</a>';
+
+    UserNotes.updateComments = function () {
+        var commentsHTML = Mustache.render(UserNotes.commentsContainer, UserNotes.data);
+        console.log(commentsHTML);
+        $.ajax({
+            url: mw.config.get('wgScriptPath') + '/api.php',
+            method: 'GET',
+            type: 'GET',
+            data: {
+                action: 'parse',
+                text: commentsHTML,
+                format: 'json'
+            },
+            dataType: 'json'
+        }).then(function (data) {
+            var comments = data.parse.text['*'];
+            $('.usernotes .un-comments').empty().append(comments);
+        });
+    }
 
     UserNotes.appendContainer = function(location) {
         location.append(Mustache.render(UserNotes.container, UserNotes.data));
@@ -85,14 +114,29 @@
             $this = $(this);
             if (e.which != 13) return;
             $this.attr('disabled', 'disabled');
-            UserNotes.postComment(UserNotes.data.username, $(this).val()).then(function() {
+            var date = new Date();
+            UserNotes.postToDiscord(UserNotes.data.username, $this.val(), date);
+            UserNotes.postComment(UserNotes.data.username, $this.val(), date).then(function() {
                 UserNotes.getComments(UserNotes.data.username).then(function() {
-                    $('.usernotes .un-comments').empty().append(Mustache.render(UserNotes.commentsContainer, UserNotes.data));
+                    UserNotes.updateComments();
                     $this.removeAttr('disabled');
                     $this.val('');
                 });
             });
         });
+        $('#un-addpassword').on('keypress', function (e) {
+            $this = $(this);
+            if (e.which != 13) return;
+            $this.attr('disabled', 'disabled');
+            var date = new Date();
+            UserNotes.login('noreplyz@fandom.com', $this.val()).then(function(){
+                // Successfully logged in
+                UserNotes.data.loggedin = true;
+                $('.usernotes').remove();
+            }).catch(function(e) {
+                console.log(e);
+            });
+        })
     };
 
     UserNotes.enableDraggable = function(element, hook) {
@@ -138,6 +182,7 @@
     }
 
     UserNotes.login = function(username, password) {
+        console.log(username, password);
         return firebase.auth().signInWithEmailAndPassword(username, password).catch(function (e) {
             console.log(e);
         });
@@ -169,7 +214,7 @@
             }
         });
     }
-    UserNotes.postComment = function(user, comment) {
+    UserNotes.postComment = function(user, comment, date) {
         user = keyEncode(user);
         var path = '/comments/' + user + '/';
         var commentKey = UserNotes.db.ref().child(path).push().key;
@@ -177,7 +222,7 @@
         newPost[path + commentKey] = {
             author: UserNotes.currentUser,
             comment: comment,
-            timestamp: new Date().getTime()
+            timestamp: date.getTime()
         }
         var countRef = firebase.database().ref('/counts/' + user + '/');
         countRef.transaction(function (currentCount) {
@@ -201,7 +246,7 @@
                 embeds: [{
                     description: '**User:** ' + user + '\n**Comment:** ' + comment,
                     footer: {
-                        text: 'Author: ' + UserNotes.currentUser + ' | Wiki: <' + UserNotes.data.wikipath + '>'
+                        text: 'Author: ' + UserNotes.currentUser + ' | ' + mw.config.get('wgServer') + mw.config.get('wgScriptPath')
                     },
                     timestamp: date.toISOString()
                 }]
@@ -227,7 +272,7 @@
         count: 0,
         comments: [],
         wikipath: mw.config.get('wgScriptPath'),
-        dark: false,
+        dark: window.UserNotesDark ? true : false,
         loggedin: false
     };
     UserNotes.webhook = 'https://discordapp.com/api/webhooks/624983129236701184/';
@@ -239,13 +284,18 @@
 
     // Import Firebase
     importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-app.js');
-    importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-auth.js');
-    importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-database.js');
+    importStylesheetURI('https://internal-vstf.fandom.com/index.php?title=MediaWiki:UserNotes.css&action=raw&ctype=text/css');
+    var waitForApp = setInterval(function() {
+        if (typeof firebase == 'object') {
+            clearInterval(waitForApp);
+            importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-auth.js');
+            importScriptURI('https://www.gstatic.com/firebasejs/4.5.1/firebase-database.js');
+        }
+    }, 300);
 
-    var waitForFirebase = setTimeout(function() {
-        if (firebase && firebase.auth && firebase.database) {
-            console.log("cleared");
-            clearTimeout(waitForFirebase);
+    var waitForFirebase = setInterval(function() {
+        if (typeof firebase == 'object' && typeof firebase.auth === 'function' && typeof firebase.database === 'function') {
+            clearInterval(waitForFirebase);
 
             // Your web app's Firebase configuration
             var firebaseConfig = {
@@ -262,12 +312,12 @@
             if (firebase.auth().currentUser) {
                 UserNotes.data.loggedin = true;
             }
-            UserNotes.db = firebase.database();
             firebase.auth().onAuthStateChanged(function (user) {
                 // Check if logged in
                 if (user) {
                     if (user.email === "noreplyz@fandom.com") {
                         UserNotes.data.loggedin = true;
+                        UserNotes.db = firebase.database();
                     }
                 } else {
                     UserNotes.data.loggedin = false;
@@ -277,14 +327,17 @@
                 if ($.cookie('usernotes-token')) {
                     UserNotes.webhookToken = $.cookie('usernotes-token');
                 } else {
-                    UserNotes.getDiscordToken();
+                    UserNotes.getDiscordToken().then(null, function() {
+                        // user not logged in
+                    });
                 }
                 
                 // Only load container and listeners once, only load if logged in
+                UserNotes.data.username = $('.UserProfileMasthead .masthead-info h1').text();
                 if (!UserNotes.loaded && UserNotes.data.loggedin) {
+                    $('#open-usernotes').remove();
                     UserNotes.loaded = true;
                     // Place button to open container into the profile
-                    UserNotes.data.username = $('.UserProfileMasthead .masthead-info h1').text();
                     UserNotes.getNumComments(UserNotes.data.username).then(function () {
                         $('.mw-special-Contributions #contentSub > a:last').after(Mustache.render(UserNotes.openContainer, UserNotes.data));
 
@@ -294,9 +347,10 @@
                                 $(this).removeClass('usernotes-closed');
                                 $(this).addClass('usernotes-open');
                                 $('#open-usernotes').text('Loading notes...');
-                                UserNotes.getComments(UserNotes.data.username).then(function() {
+                                UserNotes.getComments(UserNotes.data.username).then(function () {
                                     $('#open-usernotes').text('Hide UserNotes');
                                     UserNotes.appendContainer($('body'));
+                                    UserNotes.updateComments();
                                 });
                             } else {
                                 $(this).addClass('usernotes-closed');
@@ -306,8 +360,27 @@
                             }
                         });
                     });
+                } else if (!UserNotes.loaded) {
+                    $('#open-usernotes').remove();
+                    UserNotes.data.username = $('.UserProfileMasthead .masthead-info h1').text();
+                    $('.mw-special-Contributions #contentSub > a:last').after(Mustache.render(UserNotes.openContainer, UserNotes.data));
+
+                    // Toggle open and close
+                    $('#open-usernotes').on('click', function () {
+                        if ($(this).hasClass('usernotes-closed')) {
+                            $(this).removeClass('usernotes-closed');
+                            $(this).addClass('usernotes-open');
+                            $('#open-usernotes').text('Hide UserNotes');
+                            UserNotes.appendContainer($('body'));
+                        } else {
+                            $(this).addClass('usernotes-closed');
+                            $(this).removeClass('usernotes-open');
+                            $('#open-usernotes').text('UserNotes (Log in)');
+                            $('.usernotes').remove();
+                        }
+                    });
                 }
             });
         }
-    }, 1000);
+    }, 300);
 })(jQuery, mediaWiki, Mustache);
