@@ -1,6 +1,6 @@
 ;(function($, mw, Mustache) {
 
-    if (!mw.config.get('wgCanonicalSpecialPageName') === 'Contributions') return;
+    if (!(mw.config.get('wgCanonicalSpecialPageName') === 'Contributions')) return;
     
     var chars = '.$[]#/%'.split('');
     var charCodes = chars.map(function(c) {
@@ -27,20 +27,18 @@
 
     var UserNotes = {};
     UserNotes.commentsContainer = 
-        '<div class="un-comments">' +
-            '{{#comments}}' +
-            '<div class="un-comment">' +
-            '<div class="un-comment-text">{{comment}}</div>' +
-                '<div class="un-comment-footer">' + 
-                    '<a href="{{wikipath}}/wiki/Special:Contributions/{{author}}" target="_blank">{{author}}</a> ' + 
-                    '&bull; {{time}}' + 
-                '</div>' +
+        '{{#comments}}' +
+        '<div class="un-comment">' +
+        '<div class="un-comment-text">{{comment}}</div>' +
+            '<div class="un-comment-footer">' + 
+                '<a href="{{wikipath}}/wiki/Special:Contributions/{{author}}" target="_blank">{{author}}</a> ' + 
+                '&bull; {{time}}' + 
             '</div>' +
-            '{{/comments}}' +
-            '{{^comments}}' +
-            'No comments found.' +
-            '{{/comments}}' +
-        '</div>';
+        '</div>' +
+        '{{/comments}}' +
+        '{{^comments}}' +
+        'No comments found.' +
+        '{{/comments}}';
 
     UserNotes.container = 
         '<div class="usernotes{{#dark}} dark{{/dark}}">' +
@@ -54,7 +52,9 @@
                 '</div>' +
                 '{{/infocards}}' +
             '</div>-->' +
-            UserNotes.commentsContainer +
+            '<div class="un-comments">' +
+                UserNotes.commentsContainer +
+            '</div>' +
             '<div class="un-addcomment">' +
                 '<input id="un-addcomment-input" placeholder="Add a comment"></input>' +
             '</div>' +
@@ -72,6 +72,27 @@
     UserNotes.appendContainer = function(location) {
         location.append(Mustache.render(UserNotes.container, UserNotes.data));
         UserNotes.enableDraggable($('.usernotes')[0], $('.un-header')[0]);
+
+        // close on X button
+        $('.un-close').on('click', function () {
+            $('#open-usernotes').addClass('usernotes-closed');
+            $('#open-usernotes').removeClass('usernotes-open');
+            $('#open-usernotes').text('UserNotes (' + UserNotes.data.count + ')');
+            $('.usernotes').remove();
+        });
+        // add comment on enter
+        $('#un-addcomment-input').on('keypress', function (e) {
+            $this = $(this);
+            if (e.which != 13) return;
+            $this.attr('disabled', 'disabled');
+            UserNotes.postComment(UserNotes.data.username, $(this).val()).then(function() {
+                UserNotes.getComments(UserNotes.data.username).then(function() {
+                    $('.usernotes .un-comments').empty().append(Mustache.render(UserNotes.commentsContainer, UserNotes.data));
+                    $this.removeAttr('disabled');
+                    $this.val('');
+                });
+            });
+        });
     };
 
     UserNotes.enableDraggable = function(element, hook) {
@@ -180,7 +201,7 @@
                 embeds: [{
                     description: '**User:** ' + user + '\n**Comment:** ' + comment,
                     footer: {
-                        text: 'Author: ' + UserNotes.currentUser
+                        text: 'Author: ' + UserNotes.currentUser + ' | Wiki: <' + UserNotes.data.wikipath + '>'
                     },
                     timestamp: date.toISOString()
                 }]
@@ -204,15 +225,7 @@
             text: 'mod notes'
         }],
         count: 0,
-        comments: [{
-            text: 'Sent insults to User',
-            author: 'Jr Meme',
-            time: '18 August 2019 at 9:00'
-        }, {
-            text: 'Blocking for 1 month - already given a warning in Thread:12345',
-            author: 'Mendes3',
-            time: '3 September 2019 at 13:30'
-        }],
+        comments: [],
         wikipath: mw.config.get('wgScriptPath'),
         dark: false,
         loggedin: false
@@ -291,13 +304,6 @@
                                 $('#open-usernotes').text('UserNotes (' + UserNotes.data.count + ')');
                                 $('.usernotes').remove();
                             }
-                        });
-                        // close on X button
-                        $('body').on('click', '.un-close', function () {
-                            $('#open-usernotes').addClass('usernotes-closed');
-                            $('#open-usernotes').removeClass('usernotes-open');
-                            $('#open-usernotes').text('UserNotes (' + UserNotes.data.count + ')');
-                            $('.usernotes').remove();
                         });
                     });
                 }
