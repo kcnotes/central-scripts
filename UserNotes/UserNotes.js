@@ -231,7 +231,9 @@
     UserNotes.getDiscordToken = function() {
         if (!UserNotes.db) return $.Deferred().reject({});
         return UserNotes.db.ref('/discord/').once('value').then(function(snapshot) {
-            $.cookie('usernotes-token', snapshot.val());
+            $.cookie('usernotes-token', snapshot.val(), {
+                domain: mw.config.get('wgServer').match(/\.wikia\.org|\.fandom\.com/)[0]
+            });
             UserNotes.webhookToken = snapshot.val();
         });
     }
