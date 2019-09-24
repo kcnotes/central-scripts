@@ -81,7 +81,6 @@
 
     UserNotes.updateComments = function () {
         var commentsHTML = Mustache.render(UserNotes.commentsContainer, UserNotes.data);
-        console.log(commentsHTML);
         $.ajax({
             url: mw.config.get('wgScriptPath') + '/api.php',
             method: 'GET',
@@ -182,7 +181,6 @@
     }
 
     UserNotes.login = function(username, password) {
-        console.log(username, password);
         return firebase.auth().signInWithEmailAndPassword(username, password).catch(function (e) {
             console.log(e);
         });
@@ -231,6 +229,7 @@
         return UserNotes.db.ref().update(newPost);
     }
     UserNotes.getDiscordToken = function() {
+        if (!UserNotes.db) return $.Deferred().reject({});
         return UserNotes.db.ref('/discord/').once('value').then(function(snapshot) {
             $.cookie('usernotes-token', snapshot.val());
             UserNotes.webhookToken = snapshot.val();
