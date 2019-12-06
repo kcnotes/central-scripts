@@ -252,7 +252,7 @@
                     timestamp: date.toISOString()
                 }]
             }),
-            dataType: "text"
+            contentType: "application/json"
         });
     }
 
