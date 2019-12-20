@@ -24,8 +24,11 @@
     var keyDecode = function(str) {
         return str.replace(charCodesRegex, (match) => codeToChar[match]);
     }
-
+    
     var UserNotes = {};
+    UserNotes.webhook = 'https://discordapp.com/api/webhooks/624983129236701184/';
+    UserNotes.webhookToken = null;
+    UserNotes.baseAPIURL = 'https://fandom-usernotes.firebaseio.com/';
 
     UserNotes.spinner = function (size) {
         return '<svg class="wds-spinner wds-spinner__block" width="' + size + '" height="' + size + '" viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">' +
@@ -192,8 +195,12 @@
     
     UserNotes.getNumComments = function (user) {
         user = keyEncode(user);
-        return UserNotes.db.ref('/counts/' + user).once('value').then(function (snapshot) {
-            UserNotes.data.count = snapshot.val() ? snapshot.val() : 0;
+        return $.ajax({
+            url: UserNotes.baseAPIURL + '/counts/' + user + '.json',
+            type: "GET",
+            contentType: "application/json"
+        }).then(function(count) {
+            UserNotes.data.count = count ? count : 0;
         });
     }
     UserNotes.getComments = function (user) {
@@ -256,6 +263,32 @@
         });
     }
 
+    UserNotes.addEventListeners = function() {
+        // Toggle open and close
+        $('#contentSub').on('click', '#open-usernotes', function () {
+            if ($(this).hasClass('usernotes-closed')) {
+                $(this).removeClass('usernotes-closed');
+                $(this).addClass('usernotes-open');
+                $('#open-usernotes').text('Loading notes...');
+                if (UserNotes.data.loggedin) {
+                    UserNotes.getComments(UserNotes.data.username).then(function () {
+                        $('#open-usernotes').text('Hide UserNotes');
+                        UserNotes.appendContainer($('body'));
+                        UserNotes.updateComments();
+                    });
+                } else {
+                    $('#open-usernotes').text('Hide UserNotes');
+                    UserNotes.appendContainer($('body'));
+                }
+            } else {
+                $(this).addClass('usernotes-closed');
+                $(this).removeClass('usernotes-open');
+                $('#open-usernotes').text('UserNotes (' + UserNotes.data.count + ')');
+                $('.usernotes').remove();
+            }
+        });
+    }
+
     UserNotes.loaded = false;
     
     UserNotes.data = {
@@ -276,8 +309,6 @@
         dark: window.UserNotesDark ? true : false,
         loggedin: false
     };
-    UserNotes.webhook = 'https://discordapp.com/api/webhooks/624983129236701184/';
-    UserNotes.webhookToken = null;
 
     window.UserNotes = UserNotes;
 
@@ -335,50 +366,13 @@
                 
                 // Only load container and listeners once, only load if logged in
                 UserNotes.data.username = $('.UserProfileMasthead .masthead-info h1').text();
-                if (!UserNotes.loaded && UserNotes.data.loggedin) {
+                if (!UserNotes.loaded) {
                     $('#open-usernotes').remove();
                     UserNotes.loaded = true;
                     // Place button to open container into the profile
                     UserNotes.getNumComments(UserNotes.data.username).then(function () {
                         $('.mw-special-Contributions #contentSub > a:last').after(Mustache.render(UserNotes.openContainer, UserNotes.data));
-
-                        // Toggle open and close
-                        $('#open-usernotes').on('click', function () {
-                            if ($(this).hasClass('usernotes-closed')) {
-                                $(this).removeClass('usernotes-closed');
-                                $(this).addClass('usernotes-open');
-                                $('#open-usernotes').text('Loading notes...');
-                                UserNotes.getComments(UserNotes.data.username).then(function () {
-                                    $('#open-usernotes').text('Hide UserNotes');
-                                    UserNotes.appendContainer($('body'));
-                                    UserNotes.updateComments();
-                                });
-                            } else {
-                                $(this).addClass('usernotes-closed');
-                                $(this).removeClass('usernotes-open');
-                                $('#open-usernotes').text('UserNotes (' + UserNotes.data.count + ')');
-                                $('.usernotes').remove();
-                            }
-                        });
-                    });
-                } else if (!UserNotes.loaded) {
-                    $('#open-usernotes').remove();
-                    UserNotes.data.username = $('.UserProfileMasthead .masthead-info h1').text();
-                    $('.mw-special-Contributions #contentSub > a:last').after(Mustache.render(UserNotes.openContainer, UserNotes.data));
-
-                    // Toggle open and close
-                    $('#open-usernotes').on('click', function () {
-                        if ($(this).hasClass('usernotes-closed')) {
-                            $(this).removeClass('usernotes-closed');
-                            $(this).addClass('usernotes-open');
-                            $('#open-usernotes').text('Hide UserNotes');
-                            UserNotes.appendContainer($('body'));
-                        } else {
-                            $(this).addClass('usernotes-closed');
-                            $(this).removeClass('usernotes-open');
-                            $('#open-usernotes').text('UserNotes (Log in)');
-                            $('.usernotes').remove();
-                        }
+                        UserNotes.addEventListeners();
                     });
                 }
             });
