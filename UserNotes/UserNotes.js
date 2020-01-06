@@ -80,7 +80,7 @@
     
     UserNotes.openContainer = 
         ' | <a class="usernotes-closed{{#count}} usernotes-hasnotes{{/count}}" id="open-usernotes">' +
-            '<span>UserNotes{{#count}} ({{count}}){{/count}}{{^loggedin}} (Log in){{/loggedin}}</span>' +
+            '<span>UserNotes{{#count}} ({{count}}){{/count}}</span>' +
         '</a>';
 
     UserNotes.updateComments = function () {
