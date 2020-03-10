@@ -1,4 +1,3 @@
-/* <syntaxhighlight lang="javascript"> */
 {
     "en": {
         "title": "Verification for Discord",
@@ -9,7 +8,7 @@
         "verify-login": "To verify, please log in to your Fandom account.",
         "verify-gamepedia": "I have a Gamepedia account",
         "button-login": "Log in",
-        "verify-complete": "You are now verified on the Fandom side! Now, go to the #verification channel and say the following text:",
-        "general-error": "Something went wrong. The error was"
+        "verify-complete": "Done! Now, please go to the #verification channel and send the following text:",
+        "general-error": "Something went wrong. The error was:"
     }
 }
