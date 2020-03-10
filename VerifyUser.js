@@ -1,3 +1,10 @@
+/**
+ * VerifyUser - add Discord handle automatically to user profiles on Fandom.
+ * To efficiently perform verification, provide a link in the form
+ * https://community.fandom.com/wiki/Special:VerifyUser/<wiki-username>?user=<discord-username>&tag=<discord-tag>
+ * 
+ * @author Noreplyz
+ */
 ;(function(window, $, mw, Mustache) {
     if (!mw.config.get('wgPageName').match(/^Special:VerifyUser.*/)) return;
 
@@ -29,18 +36,18 @@
         '{{#username}}' + 
             '{{^usernameCompare}}' +
                 '<div style="color:#ee1a41;font-weight:bold">' +
-                    'Warning: You are currently logged in to a different user.' +
+                    '{{#i18n}}error-loggedin{{/i18n}}' +
                 '</div>' + 
             '{{/usernameCompare}}' +
-            'To verify, please enter your Discord handle in the box below.<br/><br/>' + 
+            '{{#i18n}}verify-instructions{{/i18n}}<br/><br/>' + 
             '<input placeholder="discord#0000" value="{{discordHandle}}" style="padding:8px; width:350px;font-family:\'Rubik\';font-size:20px" id="verify-input"/> ' +
-            '<div class="wds-button" type="submit" style="vertical-align:middle;cursor:pointer;" id="verify"><span>Verify</span></div>' +
-            '<br/><br/><small>Verification adds your Discord handle to your public profile.</small>' +
+            '<div class="wds-button" type="submit" style="vertical-align:middle;cursor:pointer;" id="verify"><span>{{#i18n}}button-verify{{/i18n}}</span></div>' +
+            '<br/><br/><small>{{#i18n}}verify-notice{{/i18n}}</small>' +
         '{{/username}}' + 
         '{{^username}}' + 
-            'To verify, please <a href="https://www.fandom.com/signin?redirect={{backlink}}">log in to your Fandom account</a>. If you have a Gamepedia account, see <a href="https://help.gamepedia.com/Discord" class="external">the Gamepedia Discord guide</a>.<br/><br/>' + 
+            '{{#i18n}}verify-login{{/i18n}} <a href="https://help.gamepedia.com/Discord" class="external">{{#i18n}}verify-gamepedia{{/i18n}}</a><br/><br/>' + 
             '<a href="https://www.fandom.com/signin?redirect={{backlink}}" style="text-decoration:none">' +
-                '<div class="wds-button" style="cursor:pointer;"><span>Log in</span></div>' + 
+                '<div class="wds-button" style="cursor:pointer;"><span>{{#i18n}}button-login{{/i18n}}</span></div>' + 
             '</a>' +
         '{{/username}}' +
         '</div>';
@@ -48,13 +55,13 @@
     // Template shown after a Discord handle is submitted
     templates.complete =
         '<div style="text-align:center;line-height:180%;font-family:\'Rubik\';">' +
-        'You are now verified on the Fandom side! Now, go to the #verification channel and say the following text:<br/><br/>' +
+        '{{#i18n}}verify-complete{{/i18n}}<br/><br/>' +
         '<input value="!verify {{username}}" onClick="this.select();" style="padding:8px; width:350px;font-family:\'Rubik\';font-size:20px" readonly/> ' +
         '</div>';
     
     templates.error =
         '<div style="color:#ee1a41;font-weight:bold">' +
-            'Something went wrong. The error was: <br/>' +
+            '{{#i18n}}general-error{{/i18n}} <br/>' +
             '{{error}}' +
         '</div>';
     
@@ -72,50 +79,67 @@
             }
         });
     }
-    
-    // Starts the script
-    verifyUser.init = function() {
-        // Update header/title
-        $('.page-header__title').text('Verification for Discord');
-        $(document).prop('title', 'Verification for Discord | FANDOM powered by Wikia');
-        var username = mw.config.get('wgUserName'),
-            pagename = mw.config.get('wgPageName'),
-            discordHandle = '',
-            providedUsername = pagename.indexOf('/') > -1 ? pagename.replace(/^.*\//g, '') : '',
-            userid = mw.config.get('wgUserId');
-        
-        if (mw.util.getParamValue('user') && mw.util.getParamValue('tag')) {
-            discordHandle = mw.util.getParamValue('user') + '#' + mw.util.getParamValue('tag');
+
+    verifyUser.toi18n = function() {
+        return function(text, render) {
+            return render(mw.html.escape(verifyUser.i18n.msg(text).plain()));
         }
-        console.log(cleanUser(providedUsername) === cleanUser(username) || cleanUser(providedUsername) === '');
-        // Place the form into the main content section of the page
-        $('#mw-content-text').replaceWith(Mustache.render(templates.main, {
-            username: username,
-            backlink: encodeURIComponent(window.location),
-            usernameCompare: cleanUser(providedUsername) === cleanUser(username) || cleanUser(providedUsername) === '',
-            discordHandle: discordHandle
-        }));
-
-        $('#verify').on('click', function() {
-            $('#WikiaArticle').empty().append('Loading...');
-            verifyUser._setDiscordHandle(userid, $('#verify-input').val()).done(function (data) {
-                $('#WikiaArticle').empty().append(Mustache.render(templates.complete, {
-                    username: username
-                }));
-            }).fail(function(e) {
-                $('#WikiaArticle').empty().append(Mustache.render(templates.error, {
-                    error: JSON.parse(e.responseText).title
-                }));
-            });
-        });
-
-        $('#verify-input').keypress(function (e) {
-            if (e.which === 13) {
-                $('#verify').click();
-            }
-        });
     };
     
-    verifyUser.init();
+    // Starts the script
+    verifyUser.init = function (i18n) {
+        i18n.loadMessages('VerifyUser').done(function(i18n) {
+            verifyUser.i18n = i18n;
+
+            // Update header/title
+            $('.page-header__title').text(i18n.msg('title').plain());
+            $(document).prop('title', i18n.msg('title').plain() + ' | Fandom');
+            var username = mw.config.get('wgUserName'),
+                pagename = mw.config.get('wgPageName'),
+                discordHandle = '',
+                providedUsername = pagename.indexOf('/') > -1 ? pagename.replace(/^.*\//g, '') : '',
+                userid = mw.config.get('wgUserId');
+            
+            if (mw.util.getParamValue('user') && mw.util.getParamValue('tag')) {
+                discordHandle = mw.util.getParamValue('user') + '#' + mw.util.getParamValue('tag');
+            }
+            console.log(cleanUser(providedUsername) === cleanUser(username) || cleanUser(providedUsername) === '');
+            // Place the form into the main content section of the page
+            $('#mw-content-text').replaceWith(Mustache.render(templates.main, {
+                username: username,
+                backlink: encodeURIComponent(window.location),
+                usernameCompare: cleanUser(providedUsername) === cleanUser(username) || cleanUser(providedUsername) === '',
+                discordHandle: discordHandle,
+                i18n: verifyUser.toi18n
+            }));
+    
+            $('#verify').on('click', function() {
+                $('#WikiaArticle').empty().append(i18n.msg('loading').plain());
+                verifyUser._setDiscordHandle(userid, $('#verify-input').val()).done(function (data) {
+                    $('#WikiaArticle').empty().append(Mustache.render(templates.complete, {
+                        username: username,
+                        i18n: verifyUser.toi18n
+                    }));
+                }).fail(function(e) {
+                    $('#WikiaArticle').empty().append(Mustache.render(templates.error, {
+                        error: JSON.parse(e.responseText).title,
+                        i18n: verifyUser.toi18n
+                    }));
+                });
+            });
+    
+            $('#verify-input').keypress(function (e) {
+                if (e.which === 13) {
+                    $('#verify').click();
+                }
+            });
+        })
+    };
+    
+    importArticle({
+        type: 'script',
+        article: 'u:dev:MediaWiki:I18n-js/code.js'
+    });
+    mw.hook('dev.i18n').add(verifyUser.init);
  
 })(window, jQuery, mediaWiki, Mustache);

@@ -1,0 +1,15 @@
+/* <syntaxhighlight lang="javascript"> */
+{
+    "en": {
+        "title": "Verification for Discord",
+        "error-loggedin": "Warning: You are currently logged in to a different user.",
+        "verify-instructions": "To verify, please enter your Discord handle in the box below.",
+        "verify-notice": "Verification adds your Discord handle to your public profile.",
+        "button-verify": "Verify",
+        "verify-login": "To verify, please log in to your Fandom account.",
+        "verify-gamepedia": "I have a Gamepedia account",
+        "button-login": "Log in",
+        "verify-complete": "You are now verified on the Fandom side! Now, go to the #verification channel and say the following text:",
+        "general-error": "Something went wrong. The error was"
+    }
+}
