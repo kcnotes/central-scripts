@@ -117,7 +117,7 @@
             if (mw.util.getParamValue('user') && mw.util.getParamValue('tag')) {
                 discordHandle = mw.util.getParamValue('user') + '#' + mw.util.getParamValue('tag');
             }
-            console.log(cleanUser(providedUsername) === cleanUser(username) || cleanUser(providedUsername) === '');
+            
             // Place the form into the main content section of the page
             $('#mw-content-text').replaceWith(Mustache.render(templates.main, {
                 username: username,
@@ -126,10 +126,11 @@
                 discordHandle: discordHandle,
                 i18n: verifyUser.toi18n
             }));
-
+            
+            // On click of verify, set Discord handle
             $('#verify').on('click', function () {
-                verifyUser._clearProfileCache(); // async, but no need to check if it actually goes through
                 verifyUser._setDiscordHandle(userid, $('#verify-input').val()).done(function (data) {
+                    verifyUser._clearProfileCache(); // async, but no need to check if it actually goes through
                     $('#WikiaArticle').empty().append(Mustache.render(templates.complete, {
                         username: username,
                         i18n: verifyUser.toi18n
@@ -142,7 +143,8 @@
                 });
                 $('#WikiaArticle').empty().append(i18n.msg('loading').plain());
             });
-
+            
+            // On Enter keypress, perform verification
             $('#verify-input').keypress(function (e) {
                 if (e.which === 13) {
                     $('#verify').click();
@@ -158,3 +160,4 @@
     mw.hook('dev.i18n').add(verifyUser.init);
 
 })(window, jQuery, mediaWiki, Mustache);
+
